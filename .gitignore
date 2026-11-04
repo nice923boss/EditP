@@ -1,0 +1,19 @@
+# holds the LLM API key
+config.json
+
+# per-machine launcher made by install.py
+pythonw_editp.exe
+python3*.dll
+pyvenv.cfg
+
+# downloaded or generated
+fonts/
+eval/images/
+eval/last_run.txt
+*_edited.png
+*_edited_*.png
+__pycache__/
+.pytest_cache/
+
+# local Claude Code launcher (machine-specific paths)
+.claude/

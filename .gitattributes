@@ -1,0 +1,2 @@
+# keep CRLF bytes exactly, so Download ZIP also gets cmd-safe batch files
+*.bat -text

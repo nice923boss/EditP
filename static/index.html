@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EditP 圖片錯字修正</title>
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <strong class="brand">EditP</strong>
+  <button id="btn-open" class="primary">開啟圖片…</button>
+  <input id="path" type="text" placeholder="或貼上圖片路徑後按 Enter" spellcheck="false">
+  <button id="btn-close" title="清空目前的圖片，下次打開是空白畫面" disabled>清空</button>
+  <span id="status" class="status" role="status" aria-live="polite">尚未開啟圖片</span>
+  <span id="engine" class="engine" hidden></span>
+  <button id="btn-settings">LLM 設定</button>
+  <button id="btn-help" title="快捷鍵與用法（F1）" aria-label="說明">?</button>
+</header>
+
+<div class="toolbar">
+  <div class="group" aria-label="步驟">
+    <button id="btn-undo" disabled>↶ 復原</button>
+    <button id="btn-redo" disabled>↷ 重做</button>
+  </div>
+  <div class="group" role="radiogroup" aria-label="工具">
+    <span class="label">工具</span>
+    <label><input type="radio" name="tool" value="arrow" checked> 箭頭</label>
+    <label><input type="radio" name="tool" value="box"> 框選</label>
+  </div>
+  <div class="group" role="radiogroup" aria-label="顯示">
+    <span class="label">顯示</span>
+    <label><input type="radio" name="view" value="result" checked> 修改後</label>
+    <label><input type="radio" name="view" value="original"> 原圖</label>
+    <label><input type="checkbox" id="show-marks" checked> 顯示標記</label>
+  </div>
+  <div class="group" role="radiogroup" aria-label="縮放">
+    <span class="label">縮放</span>
+    <label><input type="radio" name="zoom" value="fit" checked> 符合視窗</label>
+    <label><input type="radio" name="zoom" value="1"> 100%</label>
+    <label><input type="radio" name="zoom" value="2"> 200%</label>
+  </div>
+  <span class="hint" id="tool-hint">在文字上點一下，或從標籤位置拖曳到文字上</span>
+</div>
+
+<main class="workspace">
+  <section class="viewport" id="viewport">
+    <div class="empty" id="empty">按「開啟圖片…」選一張 AI 生成的圖片<br>也可以把圖片拖進來，或複製圖片後按 Ctrl+V</div>
+    <div class="stage" id="stage" hidden>
+      <img id="img" alt="" draggable="false">
+      <svg id="overlay" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"></svg>
+      <div id="labels" class="labels"></div>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <section class="card">
+      <h2>AI 指令</h2>
+      <textarea id="instruction" rows="3" placeholder="例如：把「限時特賣」改成「限時優惠」、刪除底部的亂碼"></textarea>
+      <div class="row">
+        <button class="chip" data-instruction="修正圖上的錯字">修正錯字</button>
+        <button class="chip" data-instruction="刪除圖上的亂碼">刪除亂碼</button>
+        <span class="spacer"></span>
+        <button id="btn-plan">AI 解析</button>
+      </div>
+      <p id="plan-reason" class="reason" hidden></p>
+    </section>
+
+    <section class="card list-card">
+      <h2>批次修改清單 <span id="count" class="count">0</span></h2>
+      <p class="muted" id="list-empty">用箭頭或框選指定要修正的文字行，每支箭頭的標籤就是該行的新內容。</p>
+      <ol id="items" class="items"></ol>
+    </section>
+
+    <section class="actions">
+      <button id="btn-apply" class="primary" title="Ctrl+Enter">全部套用</button>
+      <button id="btn-save" title="存成原圖旁的 _edited.png（Ctrl+S）">另存新檔</button>
+      <button id="btn-save-as" title="自己選位置、檔名與格式（Ctrl+Shift+S）">另存到…</button>
+    </section>
+  </aside>
+</main>
+
+<footer class="credit">製作者：黃政文</footer>
+
+<dialog id="settings">
+  <form method="dialog" class="settings">
+    <h2>LLM 設定（OpenAI 相容）</h2>
+    <label>Base URL<input id="cfg-base" type="text" spellcheck="false"></label>
+    <div class="field">
+      <label for="cfg-key">API Key</label>
+      <span class="row"><input id="cfg-key" type="password" spellcheck="false" autocomplete="off">
+      <label class="inline"><input type="checkbox" id="cfg-show"> 顯示</label></span>
+    </div>
+    <label>Model<input id="cfg-model" type="text" spellcheck="false"></label>
+    <p id="cfg-msg" class="muted"></p>
+    <div class="row">
+      <button type="button" id="cfg-test">測試連線</button>
+      <span class="spacer"></span>
+      <button type="button" id="cfg-cancel">取消</button>
+      <button type="button" id="cfg-save" class="primary">儲存</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="saved-dlg">
+  <div class="saved">
+    <h2>存檔完成</h2>
+    <img id="saved-img" alt="存檔的圖片預覽">
+    <p class="saved-name" id="saved-name"></p>
+    <p class="muted saved-where" id="saved-where"></p>
+    <div class="row">
+      <label class="inline">再下載一份<select id="saved-fmt">
+        <option value="png">PNG</option><option value="jpg">JPG</option><option value="webp">WebP</option>
+      </select></label>
+      <button type="button" id="saved-download">下載圖片</button>
+    </div>
+    <p id="saved-msg" class="muted"></p>
+    <div class="row">
+      <button type="button" id="saved-reveal">開啟資料夾</button>
+      <button type="button" id="saved-copy">複製路徑</button>
+      <span class="spacer"></span>
+      <button type="button" id="saved-close" class="primary">關閉</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="help-dlg">
+  <div class="help">
+    <h2>用法與快捷鍵</h2>
+    <ol class="help-steps">
+      <li>開啟圖片：按「開啟圖片…」、貼上路徑、拖進視窗，或複製圖片後按 Ctrl+V。</li>
+      <li>指定要改的字：用箭頭點文字行，或用框選圈出 OCR 沒抓到的字；也可以在「AI 指令」用一句話描述。</li>
+      <li>在標籤或清單輸入新內容，留空代表刪除那行字。</li>
+      <li>按「全部套用」，滿意後按「另存新檔」或「另存到…」。原圖不會被覆蓋。</li>
+      <li>做完按「清空」，下次打開就是空白畫面，不會再帶出這張圖。</li>
+    </ol>
+    <table class="keys">
+      <tr><td>Ctrl+O</td><td>開啟圖片</td></tr>
+      <tr><td>Ctrl+V</td><td>貼上剪貼簿的圖片</td></tr>
+      <tr><td>Ctrl+Enter</td><td>全部套用（在 AI 指令框內是 AI 解析）</td></tr>
+      <tr><td>Ctrl+Z／Ctrl+Y</td><td>復原／重做（含套用後的圖）</td></tr>
+      <tr><td>Ctrl+S</td><td>另存新檔（原圖旁的 _edited）</td></tr>
+      <tr><td>Ctrl+Shift+S</td><td>另存到指定位置</td></tr>
+      <tr><td>F1</td><td>開啟這個說明</td></tr>
+    </table>
+    <p class="muted">清單會記在這個瀏覽器，重開同一張圖會帶回上次的清單。</p>
+    <div class="row"><span class="spacer"></span><button type="button" id="help-close" class="primary">關閉</button></div>
+  </div>
+</dialog>
+
+<template id="item-tpl">
+  <li class="item">
+    <div class="item-head">
+      <span class="badge"></span>
+      <span class="old"></span>
+      <span class="tag garbled" hidden>亂碼</span>
+      <button class="remove" title="移除這一項">✕</button>
+    </div>
+    <input class="new-text" type="text" placeholder="留空表示刪除這行文字">
+    <details class="style">
+      <summary>樣式微調</summary>
+      <div class="style-grid">
+        <label>字型<select data-k="font"><option value="sans">黑體</option><option value="serif">明體</option><option value="kai">楷體</option></select></label>
+        <label>粗細<input data-k="weight" type="number" min="100" max="900" step="100"></label>
+        <label>字級<input data-k="size" type="number" min="4" step="0.5"></label>
+        <label>字距<input data-k="tracking" type="number" step="0.5"></label>
+        <label>顏色<input data-k="color" type="color"></label>
+        <label>對齊<select data-k="align"><option value="left">靠左</option><option value="center">置中</option><option value="right">靠右</option></select></label>
+        <label>光暈半徑<input data-k="glow.radius" type="number" min="0" max="30" step="1"></label>
+        <label>光暈強度<input data-k="glow.strength" type="number" min="0" max="1" step="0.05"></label>
+        <label>描邊寬度<input data-k="outline.width" type="number" min="0" max="20" step="1"></label>
+        <label>描邊顏色<input data-k="outline.color" type="color"></label>
+        <label>水平位移<input data-k="dx" type="number" step="1"></label>
+        <label>垂直位移<input data-k="dy" type="number" step="1"></label>
+      </div>
+      <p class="muted style-note">套用一次後才會有測得的樣式；改了會自動重繪。</p>
+    </details>
+  </li>
+</template>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
